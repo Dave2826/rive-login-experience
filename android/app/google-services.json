@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "545310311540",
+    "project_id": "flutter-spring-test-73f45",
+    "storage_bucket": "flutter-spring-test-73f45.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:545310311540:android:063215005c58bfdcf87d21",
+        "android_client_info": {
+          "package_name": "com.example.login_drive_animation"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAvIzNf3A4rzaE0CU5ZLudCXXgnU6XXQoo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

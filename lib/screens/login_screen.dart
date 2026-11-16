@@ -1,7 +1,11 @@
 
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
-import 'dart:async'; // 3.1 Importar el Timer
+
+import 'products_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,101 +19,162 @@ class _LoginScreenState extends State<LoginScreen> {
 
   StateMachineController? _controller;
 
-  // StateMachine Inputs
+  // State Machine Inputs
   SMIBool? _isChecking;
   SMIBool? _isHandsUp;
   SMITrigger? _trigSuccess;
   SMITrigger? _trigFail;
   SMINumber? _numLook;
 
-  // 3.2 Timer para detener el recorrido de la mirada
+  // Timer para controlar el recorrido de la mirada
   Timer? _typingDebounce;
 
-  // 2.1 Crear variables para FocusNode
+  // FocusNodes
   final _emailFocus = FocusNode();
   final _passwordFocus = FocusNode();
 
-  // 4.1 Controles para manipular lo que escribe el usuario
+  // Controladores de texto
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
 
-  // 4.2 Errores para mostrar en la UI
+  // Errores de validación
   String? emailError;
   String? passError;
 
-  // 4.3 Validadores
+  // Estado de carga para impedir envíos repetidos
+  bool _isLoading = false;
+
+  // Validador de correo
   bool isValidEmail(String email) {
     final re = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
     return re.hasMatch(email);
   }
 
+  // Validador de contraseña
   bool isValidPassword(String pass) {
-    // Mínimo 8 caracteres, una mayúscula, una minúscula, un dígito y un especial
     final re = RegExp(
       r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
     );
     return re.hasMatch(pass);
   }
 
-  // 4.4 Acción del botón
-  void _onLogin() {
-    // Recortar espacios en blanco accidentales
+  // Acción del botón Login
+  Future<void> _onLogin() async {
+    if (_isLoading) return;
+
     final email = emailCtrl.text.trim();
     final pass = passCtrl.text;
 
-    // Recalcular errores
     final emailTypedError =
-        isValidEmail(email) ? null : 'Invalid Email';
+        isValidEmail(email) ? null : 'Correo electrónico inválido';
 
     final passTypedError =
-        isValidPassword(pass) ? null : 'Invalid Password';
+        isValidPassword(pass) ? null : 'Contraseña inválida';
 
-    // 4.5 Para mostrar el cambio
     setState(() {
       emailError = emailTypedError;
       passError = passTypedError;
     });
 
-    // 4.6 Cerrar el teclado y dejar al oso en posición neutral
     FocusScope.of(context).unfocus();
+
     _typingDebounce?.cancel();
     _isChecking?.change(false);
     _isHandsUp?.change(false);
     _numLook?.value = 50.0;
 
-    // 4.7 Activar triggers
-    if (emailTypedError == null && passTypedError == null) {
+    if (emailTypedError != null || passTypedError != null) {
+      _trigFail?.fire();
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: pass,
+      );
+
+      if (!mounted) return;
+
       _trigSuccess?.fire();
-    } else {
+
+      // Mantener la carga mientras se reproduce la animación de éxito.
+      await Future.delayed(const Duration(seconds: 2));
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ProductsScreen()),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        passError = _authErrorMessage(e.code);
+      });
+
+      _trigFail?.fire();
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        passError = 'No se pudo iniciar sesión. Inténtalo de nuevo';
+      });
+
       _trigFail?.fire();
     }
   }
 
-  // 2.2 Crear los oyentes (listeners)
+  String _authErrorMessage(String code) {
+    switch (code) {
+      case 'wrong-password':
+        return 'Contraseña incorrecta';
+      case 'user-not-found':
+        return 'No existe una cuenta con ese correo';
+      case 'invalid-credential':
+        return 'Correo o contraseña incorrectos';
+      case 'invalid-email':
+        return 'Correo electrónico inválido';
+      case 'network-request-failed':
+        return 'Sin conexión. Revisa tu red e inténtalo de nuevo';
+      case 'operation-not-allowed':
+        return 'El inicio de sesión con correo no está habilitado';
+      case 'too-many-requests':
+        return 'Demasiados intentos. Espera unos minutos';
+      default:
+        return 'No se pudo iniciar sesión. Inténtalo de nuevo';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
 
     _emailFocus.addListener(() {
       if (_emailFocus.hasFocus) {
-        if (_isHandsUp != null) {
-          _isHandsUp!.change(false);
-
-          // 3.3 Mirada neutral
-          _numLook?.value = 50.0;
-        }
+        _isHandsUp?.change(false);
+        _numLook?.value = 50.0;
       }
     });
 
     _passwordFocus.addListener(() {
-      // Manos arriba en el campo de contraseña
       _isHandsUp?.change(_passwordFocus.hasFocus);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos el tamaño de la pantalla para hacer un diseño responsivo
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -119,15 +184,13 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               children: [
-                // Contiene la animación de Rive
+                // Animación Rive
                 SizedBox(
                   width: double.infinity,
                   height: 200,
                   child: RiveAnimation.asset(
                     'assets/login-bear-animation.riv',
-                    stateMachines: ['Login Machine'],
-
-                    // 1.2 Vincular la animación
+                    stateMachines: const ['Login Machine'],
                     onInit: (artboard) {
                       _controller =
                           StateMachineController.fromArtboard(
@@ -135,13 +198,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Login Machine',
                       );
 
-                      // 1.3 Verificar que inició correctamente
                       if (_controller == null) return;
 
-                      // Agregar el controlador al artboard
                       artboard.addController(_controller!);
 
-                      // 1.4 Vincular las variables
                       _isChecking =
                           _controller!.findSMI('isChecking');
                       _isHandsUp =
@@ -156,58 +216,36 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                // Para separar la animación de Rive del resto de los elementos
-                const SizedBox(height: 10),
+                const SizedBox(height: 20),
 
-                // Email
-                // TextField del email, con el tipo de teclado correspondiente
+                // Campo de correo
                 TextField(
-                  // 4.8 Vincular el controller
                   controller: emailCtrl,
-
-                  // 2.3 Asignar el focus al TextField
                   focusNode: _emailFocus,
-
-                  // 1.5 Vincular al campo de texto
+                  keyboardType: TextInputType.emailAddress,
                   onChanged: (value) {
-                    if (_isHandsUp != null) {
-                      // No tapes los ojos al escribir el email
-                      //_isHandsUp!.change(false);
-                    }
+                    _isHandsUp?.change(false);
 
-                    // Si isChecking es null
                     if (_isChecking == null) return;
 
-                    // Activa el modo de seguimiento de la mirada
                     _isChecking!.change(true);
 
-                    // 3.4 Implementar recorrido de mirada
-                    // Ajuste de límites de 0 a 100
-                    // 80 es la medida de calibración
                     final look = (value.length / 80.0 * 100.0)
-                        .clamp(0.0, 100.0)
-                        .toDouble();
+                        .clamp(0.0, 100.0);
 
                     _numLook?.value = look;
 
-                    // 3.5 Debounce: si vuelve a escribir, reinicia el contador
                     _typingDebounce?.cancel();
 
-                    // Crear un nuevo Timer
                     _typingDebounce =
                         Timer(const Duration(seconds: 3), () {
-                      // Si se cierra la pantalla, termina la ejecución
                       if (!mounted) return;
-
-                      // Mirada neutral
                       _isChecking?.change(false);
                     });
                   },
-
                   decoration: InputDecoration(
-                    // 4.9 Mostrar el error
+                    hintText: 'Email',
                     errorText: emailError,
-                    hintText: "Email",
                     prefixIcon: const Icon(Icons.email),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -215,53 +253,32 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 15),
 
-                // Contraseña
+                // Campo de contraseña
                 TextField(
-                  // 4.8.1 Vincular el controller
                   controller: passCtrl,
-
-                  // 2.3 Asignar el focus
                   focusNode: _passwordFocus,
-
-                  // 1.5 Vincular al campo de texto
-                  onChanged: (value) {
-                    if (_isChecking != null) {
-                      // Tapa los ojos al escribir la contraseña
-                      //_isChecking!.change(false);
-                    }
-
-                    // Si isHandsUp es null
-                    if (_isHandsUp == null) return;
-
-                    // Activa el modo de seguimiento
-                    _isHandsUp!.change(true);
-                  },
-
                   obscureText: _isObscure,
-
+                  onChanged: (value) {
+                    _isHandsUp?.change(true);
+                  },
                   decoration: InputDecoration(
-                    // 4.9 Mostrar el error
+                    hintText: 'Password',
                     errorText: passError,
-                    hintText: "Password",
                     prefixIcon: const Icon(Icons.lock),
-
                     suffixIcon: IconButton(
-                      // Icono para mostrar u ocultar la contraseña
                       icon: Icon(
                         _isObscure
                             ? Icons.visibility
                             : Icons.visibility_off,
                       ),
                       onPressed: () {
-                        // Para refrescar el icono
                         setState(() {
                           _isObscure = !_isObscure;
                         });
                       },
                     ),
-
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -271,57 +288,69 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 10),
 
                 // Recuperar contraseña
-                SizedBox(
-                  width: size.width,
-                  child: const Text(
-                    "Forgot password?",
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      decoration: TextDecoration.underline,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {},
+                    child: const Text(
+                      'Forgot password?',
+                      style: TextStyle(
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                 ),
 
                 const SizedBox(height: 10),
 
-                // Botón de inicio de sesión
-                MaterialButton(
-                  // Toma todo el ancho disponible
-                  minWidth: size.width,
+                // Botón Login
+                SizedBox(
+                  width: size.width,
                   height: 50,
-                  color: Colors.pinkAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-
-                  onPressed: _onLogin,
-
-                  child: const Text(
-                    "Login",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
+                  child: ElevatedButton(
+                    onPressed: _onLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.pinkAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Login',
+                            style: TextStyle(fontSize: 18),
+                          ),
                   ),
                 ),
 
                 const SizedBox(height: 20),
 
-                // Apartado para registrarse
-                SizedBox(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        "Register",
+                // Registro
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('Don\'t have an account? '),
+                    GestureDetector(
+                      onTap: () {},
+                      child: const Text(
+                        'Register',
                         style: TextStyle(
                           color: Colors.black,
                           fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline
+                          decoration: TextDecoration.underline,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -333,15 +362,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    // 2.4 Liberar memoria y recursos de los FocusNode
     _emailFocus.dispose();
     _passwordFocus.dispose();
 
-    // Liberar los controladores de texto
     emailCtrl.dispose();
     passCtrl.dispose();
 
-    // 3.5 Liberar el Timer
     _typingDebounce?.cancel();
 
     super.dispose();
