@@ -1,4 +1,3 @@
-
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,8 +40,12 @@ class _LoginScreenState extends State<LoginScreen> {
   String? emailError;
   String? passError;
 
-  // Estado de carga para impedir envíos repetidos
+  // Estado de carga del botón (CircularProgressIndicator)
   bool _isLoading = false;
+
+  // Guardia interna para impedir envíos duplicados, incluso después de
+  // apagar el indicador de carga durante la animación de éxito.
+  bool _isSubmitting = false;
 
   // Validador de correo
   bool isValidEmail(String email) {
@@ -58,18 +61,30 @@ class _LoginScreenState extends State<LoginScreen> {
     return re.hasMatch(pass);
   }
 
+  // Devuelve el oso a reposo y espera a que la State Machine termine sus
+  // transiciones. Los triggers de Rive duran un solo frame (`advanceInputs`
+  // los reinicia), así que dispararlos durante una transición hace que se
+  // pierdan.
+  Future<void> _settleAnimation() async {
+    _isChecking?.change(false);
+    _isHandsUp?.change(false);
+    _numLook?.value = 50.0;
+
+    await Future.delayed(const Duration(milliseconds: 700));
+  }
+
   // Acción del botón Login
   Future<void> _onLogin() async {
-    if (_isLoading) return;
+    if (_isSubmitting) return;
 
     final email = emailCtrl.text.trim();
     final pass = passCtrl.text;
 
-    final emailTypedError =
-        isValidEmail(email) ? null : 'Correo electrónico inválido';
+    final emailTypedError = isValidEmail(email)
+        ? null
+        : 'Correo electrónico inválido';
 
-    final passTypedError =
-        isValidPassword(pass) ? null : 'Contraseña inválida';
+    final passTypedError = isValidPassword(pass) ? null : 'Contraseña inválida';
 
     setState(() {
       emailError = emailTypedError;
@@ -79,16 +94,19 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
 
     _typingDebounce?.cancel();
-    _isChecking?.change(false);
-    _isHandsUp?.change(false);
-    _numLook?.value = 50.0;
 
     if (emailTypedError != null || passTypedError != null) {
+      // Esperar a que la máquina vuelva a reposo antes de disparar el trigger.
+      await _settleAnimation();
+
+      if (!mounted) return;
+
       _trigFail?.fire();
       return;
     }
 
     setState(() {
+      _isSubmitting = true;
       _isLoading = true;
     });
 
@@ -100,15 +118,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
+      // Apagar el indicador de carga y celebrar con el osito. El guardia
+      // `_isSubmitting` sigue activo para bloquear envíos duplicados.
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Dejar que la State Machine regrese a reposo antes de disparar el
+      // trigger de éxito, que de lo contrario se perdería.
+      await _settleAnimation();
+
+      if (!mounted) return;
+
       _trigSuccess?.fire();
 
-      // Mantener la carga mientras se reproduce la animación de éxito.
+      // Permitir que la animación de éxito se reproduzca antes de navegar.
       await Future.delayed(const Duration(seconds: 2));
 
       if (!mounted) return;
 
       setState(() {
-        _isLoading = false;
+        _isSubmitting = false;
       });
 
       Navigator.pushReplacement(
@@ -116,27 +146,40 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const ProductsScreen()),
       );
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        passError = _authErrorMessage(e.code);
-      });
-
-      _trigFail?.fire();
+      await _applyAuthError(e.code);
     } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _isLoading = false;
-        passError = 'No se pudo iniciar sesión. Inténtalo de nuevo';
-      });
-
-      _trigFail?.fire();
+      await _applyAuthError(null);
     }
   }
 
-  String _authErrorMessage(String code) {
+  // Restablece el estado y muestra el error en el campo que corresponda.
+  Future<void> _applyAuthError(String? code) async {
+    final message = _authErrorMessage(code);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+      _isSubmitting = false;
+
+      if (code == 'user-not-found' || code == 'invalid-email') {
+        emailError = message;
+        passError = null;
+      } else {
+        passError = message;
+        emailError = null;
+      }
+    });
+
+    // Igual que en el éxito, el trigger de fallo necesita la máquina en reposo.
+    await _settleAnimation();
+
+    if (!mounted) return;
+
+    _trigFail?.fire();
+  }
+
+  String _authErrorMessage(String? code) {
     switch (code) {
       case 'wrong-password':
         return 'Contraseña incorrecta';
@@ -190,10 +233,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 200,
                   child: RiveAnimation.asset(
                     'assets/login-bear-animation.riv',
-                    stateMachines: const ['Login Machine'],
+                    // Un solo controlador: el de `onInit`. Añadir también
+                    // `stateMachines:` crearía un segundo controlador de la
+                    // misma State Machine y avanzaría todo dos veces por frame.
                     onInit: (artboard) {
-                      _controller =
-                          StateMachineController.fromArtboard(
+                      _controller = StateMachineController.fromArtboard(
                         artboard,
                         'Login Machine',
                       );
@@ -202,16 +246,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       artboard.addController(_controller!);
 
-                      _isChecking =
-                          _controller!.findSMI('isChecking');
-                      _isHandsUp =
-                          _controller!.findSMI('isHandsUp');
-                      _trigSuccess =
-                          _controller!.findSMI('trigSuccess');
-                      _trigFail =
-                          _controller!.findSMI('trigFail');
-                      _numLook =
-                          _controller!.findSMI('numLook');
+                      _isChecking = _controller!.findSMI('isChecking');
+                      _isHandsUp = _controller!.findSMI('isHandsUp');
+                      _trigSuccess = _controller!.findSMI('trigSuccess');
+                      _trigFail = _controller!.findSMI('trigFail');
+                      _numLook = _controller!.findSMI('numLook');
                     },
                   ),
                 ),
@@ -230,15 +269,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     _isChecking!.change(true);
 
-                    final look = (value.length / 80.0 * 100.0)
-                        .clamp(0.0, 100.0);
+                    final look = (value.length / 80.0 * 100.0).clamp(
+                      0.0,
+                      100.0,
+                    );
 
                     _numLook?.value = look;
 
                     _typingDebounce?.cancel();
 
-                    _typingDebounce =
-                        Timer(const Duration(seconds: 3), () {
+                    _typingDebounce = Timer(const Duration(seconds: 3), () {
                       if (!mounted) return;
                       _isChecking?.change(false);
                     });
@@ -269,9 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isObscure
-                            ? Icons.visibility
-                            : Icons.visibility_off,
+                        _isObscure ? Icons.visibility : Icons.visibility_off,
                       ),
                       onPressed: () {
                         setState(() {
@@ -294,9 +332,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: () {},
                     child: const Text(
                       'Forgot password?',
-                      style: TextStyle(
-                        decoration: TextDecoration.underline,
-                      ),
+                      style: TextStyle(decoration: TextDecoration.underline),
                     ),
                   ),
                 ),
@@ -325,10 +361,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text(
-                            'Login',
-                            style: TextStyle(fontSize: 18),
-                          ),
+                        : const Text('Login', style: TextStyle(fontSize: 18)),
                   ),
                 ),
 
@@ -362,6 +395,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _controller?.dispose();
+
     _emailFocus.dispose();
     _passwordFocus.dispose();
 
