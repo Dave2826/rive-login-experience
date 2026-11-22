@@ -1,0 +1,18 @@
+# Comprobaciones HTTP reales contra el backend Spring Boot (salida de curl)
+# Fecha: 2026-11-21 20:17
+# Backend: http://localhost:8080 (Spring Boot 3.4.1, Java 21, PostgreSQL restaurant_db)
+# El token JWT se muestra redactado; la contrasena del usuario no se registra.
+
+1) GET /api/platillos  (sin cabecera Authorization)
+   -> HTTP 401
+   -> cuerpo: {"error": "No autorizado", "mensaje": "Full authentication is required to access this resource"}
+
+2) POST /auth/login  (usuario sembrado por el backend, contrasena omitida)
+   -> HTTP 200
+   -> cuerpo: {"token": "eyJhbGciOiJI...<token redactado>"}
+   -> longitud del token real: 131 caracteres
+
+3) GET /api/platillos  (Authorization: Bearer <token>)
+   -> HTTP 200
+   -> total de platillos: 15
+   -> primer elemento: {"id":1,"nombre":"Hamburguesa Clásica","descripcion":"Carne de res con queso, lechuga y tomate.","precio":180.00,"categoria":"Hamburguesas","disponible":true}

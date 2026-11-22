@@ -1,0 +1,46 @@
+# Comando: flutter test
+# Fecha: 2026-11-21 20:16
+# Salida real de la consola:
+
+00:00 +0: loading C:/Dev/rive-login-experience/test/config/api_config_test.dart
+00:00 +0: C:/Dev/rive-login-experience/test/config/api_config_test.dart: ApiConfig baseUrl usa el valor por defecto o el override compilado
+00:00 +1: C:/Dev/rive-login-experience/test/config/api_config_test.dart: ApiConfig baseUrl es una URL absoluta sin barra final
+00:00 +2: C:/Dev/rive-login-experience/test/config/api_config_test.dart: ApiConfig loginUri apunta a /auth/login
+00:00 +3: C:/Dev/rive-login-experience/test/config/api_config_test.dart: ApiConfig platillosUri apunta a /api/platillos
+00:00 +4: C:/Dev/rive-login-experience/test/config/api_config_test.dart: ApiConfig las URIs derivadas comparten host y puerto de baseUrl
+00:00 +5: C:/Dev/rive-login-experience/test/models/auth_models_test.dart: LoginRequest toJson incluye username y password
+00:00 +6: C:/Dev/rive-login-experience/test/models/auth_models_test.dart: AuthResponse fromJson lee el token de la respuesta
+00:00 +7: C:/Dev/rive-login-experience/test/models/auth_models_test.dart: AuthResponse fromJson devuelve token vacío cuando la clave no existe
+00:00 +8: C:/Dev/rive-login-experience/test/models/auth_models_test.dart: AuthResponse fromJson devuelve token vacío cuando el valor es nulo
+00:00 +9: C:/Dev/rive-login-experience/test/models/auth_models_test.dart: AuthResponse toJson devuelve el token
+00:00 +10: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.fromJson deserializa un JSON completo
+00:00 +11: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.fromJson acepta descripcion y categoria nulas
+00:00 +12: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.fromJson convierte un precio entero a double
+00:00 +13: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.fromJson conserva un precio decimal
+00:00 +14: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.fromJson marca como no disponible cuando disponible es false
+00:00 +15: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.fromJson marca como disponible cuando disponible es true
+00:00 +16: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.toJson incluye todos los campos cuando descripcion y categoria existen
+00:00 +17: C:/Dev/rive-login-experience/test/models/platillo_test.dart: Platillo.toJson omite descripcion y categoria cuando son nulas
+00:00 +18: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · solicitud envía POST a /auth/login con cabeceras y body JSON
+00:00 +19: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · respuestas HTTP HTTP 401 se reporta como credenciales inválidas
+00:00 +20: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · respuestas HTTP HTTP 500 se reporta como error del servidor
+00:00 +21: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · respuestas HTTP HTTP 200 sin token se rechaza
+00:00 +22: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · respuestas HTTP HTTP 200 con JSON inválido se reporta como formato no reconocido
+00:00 +23: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · fallos de red TimeoutException se reporta como tiempo de espera agotado
+00:00 +24: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · fallos de red SocketException se reporta como fallo de conexión
+00:00 +25: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · fallos de red http.ClientException se reporta como error de comunicación
+00:00 +26: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthService.login · fallos de red un error inesperado se envuelve en AuthException
+00:00 +27: C:/Dev/rive-login-experience/test/services/auth_service_test.dart: AuthException toString devuelve el mensaje
+00:00 +28: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · solicitud envía GET a /api/platillos con accept y bearer
+00:00 +29: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · respuestas exitosas mapea una lista válida a Platillo
+00:00 +30: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · respuestas exitosas devuelve una lista vacía cuando el backend no tiene platillos
+00:00 +31: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · respuestas exitosas decodifica correctamente caracteres acentuados en UTF-8
+00:00 +32: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · respuestas inválidas un objeto en lugar de lista lanza FormatException
+00:00 +33: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · respuestas inválidas una lista con un elemento no objeto lanza FormatException
+00:00 +34: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · respuestas inválidas un JSON inválido lanza FormatException
+00:00 +35: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · errores HTTP HTTP 401 señala token inválido
+00:00 +36: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · errores HTTP HTTP 500 señala error interno del servidor
+00:00 +37: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · errores HTTP HTTP 400 incluye el código en el mensaje
+00:00 +38: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · fallos de red TimeoutException se propaga
+00:00 +39: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · fallos de red SocketException se propaga como fallo de conexión
+00:00 +40: All tests passed!
