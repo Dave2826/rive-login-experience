@@ -1,5 +1,5 @@
 # Comando: flutter test
-# Fecha: 2026-11-21 20:16
+# Fecha: 2026-11-21 20:38
 # Salida real de la consola:
 
 00:00 +0: loading C:/Dev/rive-login-experience/test/config/api_config_test.dart
@@ -43,4 +43,35 @@
 00:00 +37: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · errores HTTP HTTP 400 incluye el código en el mensaje
 00:00 +38: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · fallos de red TimeoutException se propaga
 00:00 +39: C:/Dev/rive-login-experience/test/services/product_service_test.dart: ProductService.getProducts · fallos de red SocketException se propaga como fallo de conexión
-00:00 +40: All tests passed!
+00:00 +40: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController · estado inicial empieza en restoring sin token ni aviso
+00:00 +41: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore sin token guardado deja la sesión cerrada sin aviso
+00:00 +42: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore con token vigente autentica y expone el token
+00:00 +43: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore con token expirado borra el almacén y avisa
+00:00 +44: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore con token malformado borra el almacén y avisa
+00:00 +45: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore con token sin exp lo trata como expirado
+00:00 +46: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore un fallo de lectura cierra la sesión sin lanzar
+00:00 +47: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.restore es idempotente y notifica una sola transición
+00:00 +48: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.startSession persiste el token y autentica
+00:00 +49: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.startSession si el almacén falla mantiene la sesión en memoria
+00:00 +50: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.startSession limpia un aviso previo de expiración
+00:00 +51: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.signOut borra el token y cierra la sesión sin aviso
+00:00 +52: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.signOut un fallo al borrar no impide cerrar la sesión
+00:00 +53: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.expireSession invalida la sesión, borra el token y deja un aviso
+00:00 +54: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController.expireSession acepta un aviso personalizado
+00:00 +55: C:/Dev/rive-login-experience/test/services/session_controller_test.dart: SessionController · notificaciones notifica en cada transición
+00:00 +56: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.payload devuelve los claims de un token bien formado
+00:00 +57: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.payload devuelve null con un token nulo o vacío
+00:00 +58: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.payload devuelve null cuando no tiene tres segmentos
+00:00 +59: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.payload devuelve null cuando el payload no es JSON
+00:00 +60: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.expiry devuelve la fecha de expiración en UTC
+00:00 +61: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.expiry devuelve null cuando exp no es numérico o no existe
+00:00 +62: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un token con exp futuro no está expirado
+00:00 +63: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un token con exp pasado está expirado
+00:00 +64: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired el instante exacto de expiración cuenta como expirado
+00:00 +65: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un token sin exp se considera expirado
+00:00 +66: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un exp no numérico se considera expirado
+00:00 +67: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un token con dos segmentos se considera expirado
+00:00 +68: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un payload con base64 inválido se considera expirado
+00:00 +69: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un payload que no es JSON se considera expirado
+00:00 +70: C:/Dev/rive-login-experience/test/utils/jwt_utils_test.dart: JwtUtils.isExpired un token nulo o vacío se considera expirado
+00:00 +71: All tests passed!
