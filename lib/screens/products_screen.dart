@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/platillo.dart';
+import '../services/api_exceptions.dart';
 import '../services/product_service.dart';
+import '../services/session_controller.dart';
 
 class ProductsScreen extends StatefulWidget {
-  final String token;
+  final SessionController session;
 
-  const ProductsScreen({super.key, required this.token});
+  const ProductsScreen({super.key, required this.session});
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
@@ -20,19 +22,58 @@ class _ProductsScreenState extends State<ProductsScreen> {
   @override
   void initState() {
     super.initState();
-    productsFuture = productService.getProducts(widget.token);
+    productsFuture = _fetchProducts();
+  }
+
+  String get _token => widget.session.token ?? '';
+
+  // Punto único donde se traduce un 401 del catálogo en cierre de sesión.
+  // Los errores de red, timeout o formato se propagan sin tocar la sesión.
+  Future<List<Platillo>> _fetchProducts() async {
+    try {
+      return await productService.getProducts(_token);
+    } on UnauthorizedException {
+      await widget.session.expireSession();
+      rethrow;
+    }
   }
 
   // Recarga la petición del catálogo y espera su resolución para RefreshIndicator.
   Future<void> _loadProducts() async {
     setState(() {
-      productsFuture = productService.getProducts(widget.token);
+      productsFuture = _fetchProducts();
     });
     try {
       await productsFuture;
     } catch (_) {
       // Ignora la excepción aquí; FutureBuilder se encarga de renderizar el error.
     }
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cerrar sesión'),
+        content: const Text('¿Quieres cerrar la sesión actual?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cerrar sesión'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    if (!mounted) return;
+
+    await widget.session.signOut();
   }
 
   String _getErrorMessage(dynamic error) {
@@ -65,6 +106,13 @@ class _ProductsScreenState extends State<ProductsScreen> {
         title: const Text('Menú de Platillos'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _confirmLogout,
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
+          ),
+        ],
       ),
       body: FutureBuilder<List<Platillo>>(
         future: productsFuture,

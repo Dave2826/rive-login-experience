@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:login_drive_animation/config/api_config.dart';
 import 'package:login_drive_animation/models/platillo.dart';
+import 'package:login_drive_animation/services/api_exceptions.dart';
 import 'package:login_drive_animation/services/product_service.dart';
 
 const String _token = 'jwt-de-prueba';
@@ -190,7 +191,7 @@ void main() {
       await expectLater(
         _serviceWith(client).getProducts(_token),
         throwsA(
-          isA<HttpException>().having(
+          isA<UnauthorizedException>().having(
             (e) => e.message,
             'message',
             contains('no autorizada'),

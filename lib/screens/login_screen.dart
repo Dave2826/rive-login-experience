@@ -5,10 +5,12 @@ import 'package:rive/rive.dart';
 
 import '../models/auth_models.dart';
 import '../services/auth_service.dart';
-import 'products_screen.dart';
+import '../services/session_controller.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final SessionController session;
+
+  const LoginScreen({super.key, required this.session});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -132,12 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
         _isSubmitting = false;
       });
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProductsScreen(token: authResponse.token),
-        ),
-      );
+      // Guarda el token y deja que SessionGate muestre el catálogo.
+      await widget.session.startSession(authResponse.token);
     } on AuthException catch (e) {
       await _applyAuthError(e.message, e.statusCode);
     } catch (_) {
@@ -176,6 +174,9 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Aviso de sesión expirada o invalidada por 401; se consume una sola vez.
+    _authErrorMessage = widget.session.consumeMessage();
 
     _usernameFocus.addListener(() {
       if (_usernameFocus.hasFocus) {

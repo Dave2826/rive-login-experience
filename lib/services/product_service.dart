@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/platillo.dart';
+import 'api_exceptions.dart';
 
 class ProductService {
   final http.Client _client;
@@ -50,7 +51,7 @@ class ProductService {
 
         return platillos;
       } else if (response.statusCode == 401) {
-        throw const HttpException('Sesión no autorizada o token inválido.');
+        throw const UnauthorizedException();
       } else if (response.statusCode >= 500) {
         throw const HttpException(
           'Error interno en el servidor al cargar los platillos.',
