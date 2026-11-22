@@ -1,9 +1,10 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
 
+import '../models/auth_models.dart';
+import '../services/auth_service.dart';
 import 'products_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,6 +15,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final AuthService _authService = AuthService();
+
   bool _isObscure = true;
 
   StateMachineController? _controller;
@@ -29,16 +32,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Timer? _typingDebounce;
 
   // FocusNodes
-  final _emailFocus = FocusNode();
+  final _usernameFocus = FocusNode();
   final _passwordFocus = FocusNode();
 
   // Controladores de texto
-  final emailCtrl = TextEditingController();
+  final usernameCtrl = TextEditingController();
   final passCtrl = TextEditingController();
 
   // Errores de validación
-  String? emailError;
+  String? usernameError;
   String? passError;
+
+  // Error general del inicio de sesión (conexión, timeout, servidor u otro).
+  // Se muestra fuera de los campos para no atribuirlo al usuario.
+  String? _authErrorMessage;
 
   // Estado de carga del botón (CircularProgressIndicator)
   bool _isLoading = false;
@@ -46,20 +53,6 @@ class _LoginScreenState extends State<LoginScreen> {
   // Guardia interna para impedir envíos duplicados, incluso después de
   // apagar el indicador de carga durante la animación de éxito.
   bool _isSubmitting = false;
-
-  // Validador de correo
-  bool isValidEmail(String email) {
-    final re = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-    return re.hasMatch(email);
-  }
-
-  // Validador de contraseña
-  bool isValidPassword(String pass) {
-    final re = RegExp(
-      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$',
-    );
-    return re.hasMatch(pass);
-  }
 
   // Devuelve el oso a reposo y espera a que la State Machine termine sus
   // transiciones. Los triggers de Rive duran un solo frame (`advanceInputs`
@@ -77,25 +70,24 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _onLogin() async {
     if (_isSubmitting) return;
 
-    final email = emailCtrl.text.trim();
+    final username = usernameCtrl.text.trim();
     final pass = passCtrl.text;
 
-    final emailTypedError = isValidEmail(email)
-        ? null
-        : 'Correo electrónico inválido';
+    final usernameTypedError = username.isEmpty ? 'Ingresa tu usuario' : null;
 
-    final passTypedError = isValidPassword(pass) ? null : 'Contraseña inválida';
+    final passTypedError = pass.isEmpty ? 'Ingresa tu contraseña' : null;
 
     setState(() {
-      emailError = emailTypedError;
+      usernameError = usernameTypedError;
       passError = passTypedError;
+      _authErrorMessage = null;
     });
 
     FocusScope.of(context).unfocus();
 
     _typingDebounce?.cancel();
 
-    if (emailTypedError != null || passTypedError != null) {
+    if (usernameTypedError != null || passTypedError != null) {
       // Esperar a que la máquina vuelva a reposo antes de disparar el trigger.
       await _settleAnimation();
 
@@ -111,9 +103,8 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: pass,
+      final authResponse = await _authService.login(
+        LoginRequest(username: username, password: pass),
       );
 
       if (!mounted) return;
@@ -143,32 +134,35 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const ProductsScreen()),
+        MaterialPageRoute(
+          builder: (_) => ProductsScreen(token: authResponse.token),
+        ),
       );
-    } on FirebaseAuthException catch (e) {
-      await _applyAuthError(e.code);
+    } on AuthException catch (e) {
+      await _applyAuthError(e.message, e.statusCode);
     } catch (_) {
-      await _applyAuthError(null);
+      await _applyAuthError(
+        'No se pudo conectar con el servidor. Revisa tu red e inténtalo de nuevo.',
+        null,
+      );
     }
   }
 
-  // Restablece el estado y muestra el error en el campo que corresponda.
-  Future<void> _applyAuthError(String? code) async {
-    final message = _authErrorMessage(code);
-
+  // Restablece el estado y clasifica el error:
+  // - 401: credenciales inválidas, se muestra bajo la contraseña.
+  // - Conexión, timeout, servidor u otros: mensaje general, fuera de los campos.
+  Future<void> _applyAuthError(String message, int? statusCode) async {
     if (!mounted) return;
+
+    final isCredentialError = statusCode == 401;
 
     setState(() {
       _isLoading = false;
       _isSubmitting = false;
 
-      if (code == 'user-not-found' || code == 'invalid-email') {
-        emailError = message;
-        passError = null;
-      } else {
-        passError = message;
-        emailError = null;
-      }
+      usernameError = null;
+      passError = isCredentialError ? message : null;
+      _authErrorMessage = isCredentialError ? null : message;
     });
 
     // Igual que en el éxito, el trigger de fallo necesita la máquina en reposo.
@@ -179,33 +173,12 @@ class _LoginScreenState extends State<LoginScreen> {
     _trigFail?.fire();
   }
 
-  String _authErrorMessage(String? code) {
-    switch (code) {
-      case 'wrong-password':
-        return 'Contraseña incorrecta';
-      case 'user-not-found':
-        return 'No existe una cuenta con ese correo';
-      case 'invalid-credential':
-        return 'Correo o contraseña incorrectos';
-      case 'invalid-email':
-        return 'Correo electrónico inválido';
-      case 'network-request-failed':
-        return 'Sin conexión. Revisa tu red e inténtalo de nuevo';
-      case 'operation-not-allowed':
-        return 'El inicio de sesión con correo no está habilitado';
-      case 'too-many-requests':
-        return 'Demasiados intentos. Espera unos minutos';
-      default:
-        return 'No se pudo iniciar sesión. Inténtalo de nuevo';
-    }
-  }
-
   @override
   void initState() {
     super.initState();
 
-    _emailFocus.addListener(() {
-      if (_emailFocus.hasFocus) {
+    _usernameFocus.addListener(() {
+      if (_usernameFocus.hasFocus) {
         _isHandsUp?.change(false);
         _numLook?.value = 50.0;
       }
@@ -257,12 +230,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 20),
 
-                // Campo de correo
+                // Campo de usuario
                 TextField(
-                  controller: emailCtrl,
-                  focusNode: _emailFocus,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: usernameCtrl,
+                  focusNode: _usernameFocus,
+                  keyboardType: TextInputType.text,
                   onChanged: (value) {
+                    if (_authErrorMessage != null) {
+                      setState(() {
+                        _authErrorMessage = null;
+                      });
+                    }
+
                     _isHandsUp?.change(false);
 
                     if (_isChecking == null) return;
@@ -284,9 +263,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: 'Email',
-                    errorText: emailError,
-                    prefixIcon: const Icon(Icons.email),
+                    hintText: 'Usuario',
+                    errorText: usernameError,
+                    prefixIcon: const Icon(Icons.person),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -301,6 +280,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusNode: _passwordFocus,
                   obscureText: _isObscure,
                   onChanged: (value) {
+                    if (_authErrorMessage != null) {
+                      setState(() {
+                        _authErrorMessage = null;
+                      });
+                    }
+
                     _isHandsUp?.change(true);
                   },
                   decoration: InputDecoration(
@@ -338,6 +323,43 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 const SizedBox(height: 10),
+
+                // Error general del sistema (red, timeout, servidor u otro).
+                if (_authErrorMessage != null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      border: Border.all(color: Colors.red.shade200),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 20,
+                          color: Colors.red.shade700,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _authErrorMessage!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.red.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
 
                 // Botón Login
                 SizedBox(
@@ -397,10 +419,10 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _controller?.dispose();
 
-    _emailFocus.dispose();
+    _usernameFocus.dispose();
     _passwordFocus.dispose();
 
-    emailCtrl.dispose();
+    usernameCtrl.dispose();
     passCtrl.dispose();
 
     _typingDebounce?.cancel();
