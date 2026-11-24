@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart';
 
 import '../models/auth_models.dart';
 import '../services/auth_service.dart';
 import '../services/session_controller.dart';
+import 'sign_up_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final SessionController session;
@@ -41,13 +43,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final usernameCtrl = TextEditingController();
   final passCtrl = TextEditingController();
 
-  // Errores de validación
-  String? usernameError;
-  String? passError;
+  // Mensaje genérico de error del login (OWASP: no revelar qué falló).
+  static const String _loginErrorMessage = 'Credenciales inválidas';
 
-  // Error general del inicio de sesión (conexión, timeout, servidor u otro).
-  // Se muestra fuera de los campos para no atribuirlo al usuario.
-  String? _authErrorMessage;
+  // Único estado de error del login. Campos vacíos, credenciales incorrectas,
+  // conexión, timeout o servidor comparten este estado y el mismo mensaje,
+  // mostrado en un solo componente fuera de los campos.
+  String? _loginError;
 
   // Estado de carga del botón (CircularProgressIndicator)
   bool _isLoading = false;
@@ -75,27 +77,21 @@ class _LoginScreenState extends State<LoginScreen> {
     final username = usernameCtrl.text.trim();
     final pass = passCtrl.text;
 
-    final usernameTypedError = username.isEmpty ? 'Ingresa tu usuario' : null;
+    // Se mantiene la comprobación de campos vacíos, pero sin mensajes que
+    // distingan qué campo falta: un único error genérico.
+    final hasEmptyField = username.isEmpty || pass.isEmpty;
 
-    final passTypedError = pass.isEmpty ? 'Ingresa tu contraseña' : null;
-
+    // Nuevo intento: se limpia el error anterior, sea cual sea su origen.
     setState(() {
-      usernameError = usernameTypedError;
-      passError = passTypedError;
-      _authErrorMessage = null;
+      _loginError = null;
     });
 
     FocusScope.of(context).unfocus();
 
     _typingDebounce?.cancel();
 
-    if (usernameTypedError != null || passTypedError != null) {
-      // Esperar a que la máquina vuelva a reposo antes de disparar el trigger.
-      await _settleAnimation();
-
-      if (!mounted) return;
-
-      _trigFail?.fire();
+    if (hasEmptyField) {
+      await _applyLoginError();
       return;
     }
 
@@ -136,31 +132,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Guarda el token y deja que SessionGate muestre el catálogo.
       await widget.session.startSession(authResponse.token);
-    } on AuthException catch (e) {
-      await _applyAuthError(e.message, e.statusCode);
     } catch (_) {
-      await _applyAuthError(
-        'No se pudo conectar con el servidor. Revisa tu red e inténtalo de nuevo.',
-        null,
-      );
+      // Cualquier fallo del intento (credenciales, red, timeout o servidor)
+      // produce el mismo mensaje, sin distinguir su causa.
+      await _applyLoginError();
     }
   }
 
-  // Restablece el estado y clasifica el error:
-  // - 401: credenciales inválidas, se muestra bajo la contraseña.
-  // - Conexión, timeout, servidor u otros: mensaje general, fuera de los campos.
-  Future<void> _applyAuthError(String message, int? statusCode) async {
+  // Único punto de error del login: restablece el estado, muestra el mensaje
+  // genérico y dispara la animación de fallo del oso.
+  Future<void> _applyLoginError() async {
     if (!mounted) return;
-
-    final isCredentialError = statusCode == 401;
 
     setState(() {
       _isLoading = false;
       _isSubmitting = false;
-
-      usernameError = null;
-      passError = isCredentialError ? message : null;
-      _authErrorMessage = isCredentialError ? null : message;
+      _loginError = _loginErrorMessage;
     });
 
     // Igual que en el éxito, el trigger de fallo necesita la máquina en reposo.
@@ -171,12 +158,118 @@ class _LoginScreenState extends State<LoginScreen> {
     _trigFail?.fire();
   }
 
+  // Diálogo de recuperación de contraseña mediante Firebase.
+  // El mensaje mostrado es siempre el mismo, exista o no la cuenta (OWASP).
+  void _showForgotPasswordDialog() {
+    final emailController = TextEditingController();
+    String? dialogError;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Recuperar contraseña'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Correo electrónico',
+                      hintText: 'tu@correo.com',
+                      errorText: dialogError,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final email = emailController.text.trim();
+
+                    if (email.isEmpty) {
+                      setDialogState(() {
+                        dialogError = 'Ingresa tu correo';
+                      });
+                      return;
+                    }
+
+                    // Se captura antes del await para no usar `context`
+                    // después del hueco asíncrono.
+                    final messenger = ScaffoldMessenger.of(this.context);
+
+                    try {
+                      await FirebaseAuth.instance.sendPasswordResetEmail(
+                        email: email,
+                      );
+
+                      if (!dialogContext.mounted) return;
+
+                      Navigator.pop(dialogContext);
+
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Si existe una cuenta asociada a este correo, recibirás las instrucciones para restablecer tu contraseña.',
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                    } on FirebaseAuthException catch (_) {
+                      if (!dialogContext.mounted) return;
+
+                      Navigator.pop(dialogContext);
+
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Si existe una cuenta asociada a este correo, recibirás las instrucciones para restablecer tu contraseña.',
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                    } catch (_) {
+                      if (!dialogContext.mounted) return;
+
+                      Navigator.pop(dialogContext);
+
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Si existe una cuenta asociada a este correo, recibirás las instrucciones para restablecer tu contraseña.',
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 4),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Enviar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
 
     // Aviso de sesión expirada o invalidada por 401; se consume una sola vez.
-    _authErrorMessage = widget.session.consumeMessage();
+    _loginError = widget.session.consumeMessage();
 
     _usernameFocus.addListener(() {
       if (_usernameFocus.hasFocus) {
@@ -237,9 +330,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusNode: _usernameFocus,
                   keyboardType: TextInputType.text,
                   onChanged: (value) {
-                    if (_authErrorMessage != null) {
+                    if (_loginError != null) {
                       setState(() {
-                        _authErrorMessage = null;
+                        _loginError = null;
                       });
                     }
 
@@ -265,7 +358,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   decoration: InputDecoration(
                     hintText: 'Usuario',
-                    errorText: usernameError,
                     prefixIcon: const Icon(Icons.person),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -281,9 +373,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   focusNode: _passwordFocus,
                   obscureText: _isObscure,
                   onChanged: (value) {
-                    if (_authErrorMessage != null) {
+                    if (_loginError != null) {
                       setState(() {
-                        _authErrorMessage = null;
+                        _loginError = null;
                       });
                     }
 
@@ -291,7 +383,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   },
                   decoration: InputDecoration(
                     hintText: 'Password',
-                    errorText: passError,
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -315,7 +406,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () {},
+                    onPressed: _showForgotPasswordDialog,
                     child: const Text(
                       'Forgot password?',
                       style: TextStyle(decoration: TextDecoration.underline),
@@ -325,8 +416,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 10),
 
-                // Error general del sistema (red, timeout, servidor u otro).
-                if (_authErrorMessage != null) ...[
+                // Único componente visual de error del login. El mismo mensaje
+                // genérico se usa para cualquier fallo del intento.
+                if (_loginError != null) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
@@ -349,7 +441,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _authErrorMessage!,
+                            _loginError!,
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.red.shade900,
@@ -396,7 +488,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const Text('Don\'t have an account? '),
                     GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SignUpScreen(),
+                          ),
+                        );
+                      },
                       child: const Text(
                         'Register',
                         style: TextStyle(

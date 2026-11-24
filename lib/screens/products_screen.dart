@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/platillo.dart';
@@ -74,6 +75,9 @@ class _ProductsScreenState extends State<ProductsScreen> {
     if (!mounted) return;
 
     await widget.session.signOut();
+
+    // Cierra también la sesión de Firebase, si existiera.
+    await FirebaseAuth.instance.signOut();
   }
 
   String _getErrorMessage(dynamic error) {
