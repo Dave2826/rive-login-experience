@@ -46,9 +46,17 @@ class _LoginScreenState extends State<LoginScreen> {
   // Mensaje genérico de error del login (OWASP: no revelar qué falló).
   static const String _loginErrorMessage = 'Credenciales inválidas';
 
-  // Único estado de error del login. Campos vacíos, credenciales incorrectas,
-  // conexión, timeout o servidor comparten este estado y el mismo mensaje,
-  // mostrado en un solo componente fuera de los campos.
+  // Fallo ajeno a las credenciales (red, timeout, servidor o respuesta no
+  // interpretable). No revela si el usuario existe, pero tampoco disfraza un
+  // problema de infraestructura como credenciales incorrectas.
+  static const String _connectionErrorMessage =
+      'No se pudo iniciar sesión en este momento. '
+      'Verifica tu conexión e inténtalo de nuevo.';
+
+  // Único estado de error del login. Campos vacíos y credenciales incorrectas
+  // muestran el mensaje genérico; los fallos de red, timeout o servidor usan el
+  // mensaje de conexión. En ambos casos se pinta en un solo componente fuera de
+  // los campos.
   String? _loginError;
 
   // Estado de carga del botón (CircularProgressIndicator)
@@ -58,16 +66,24 @@ class _LoginScreenState extends State<LoginScreen> {
   // apagar el indicador de carga durante la animación de éxito.
   bool _isSubmitting = false;
 
+  // La transición `Hands up → Hands down → Idle` del asset encadena una
+  // animación y una mezcla cercanas a 1 s. Con 700 ms la máquina todavía no
+  // estaba en `Idle`, así que el trigger se descartaba y el oso terminaba
+  // sonriendo. Cuando las manos estaban arriba se espera lo suficiente para
+  // que vuelva a reposo antes de disparar el trigger.
+  static const Duration _settleWhenHandsUp = Duration(milliseconds: 1800);
+  static const Duration _settleWhenIdle = Duration(milliseconds: 700);
+
   // Devuelve el oso a reposo y espera a que la State Machine termine sus
   // transiciones. Los triggers de Rive duran un solo frame (`advanceInputs`
   // los reinicia), así que dispararlos durante una transición hace que se
   // pierdan.
-  Future<void> _settleAnimation() async {
+  Future<void> _settleAnimation({required bool handsWereUp}) async {
     _isChecking?.change(false);
     _isHandsUp?.change(false);
     _numLook?.value = 50.0;
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(handsWereUp ? _settleWhenHandsUp : _settleWhenIdle);
   }
 
   // Acción del botón Login
@@ -81,6 +97,11 @@ class _LoginScreenState extends State<LoginScreen> {
     // distingan qué campo falta: un único error genérico.
     final hasEmptyField = username.isEmpty || pass.isEmpty;
 
+    // Las manos del oso solo bajan con `unfocus()`. Si estaban arriba, la
+    // State Machine encadena `Hands down` antes de volver a `Idle` y hay que
+    // esperar más antes de disparar un trigger.
+    final handsWereUp = _isHandsUp?.value ?? false;
+
     // Nuevo intento: se limpia el error anterior, sea cual sea su origen.
     setState(() {
       _loginError = null;
@@ -91,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _typingDebounce?.cancel();
 
     if (hasEmptyField) {
-      await _applyLoginError();
+      await _applyLoginError(handsWereUp: handsWereUp);
       return;
     }
 
@@ -115,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Dejar que la State Machine regrese a reposo antes de disparar el
       // trigger de éxito, que de lo contrario se perdería.
-      await _settleAnimation();
+      await _settleAnimation(handsWereUp: handsWereUp);
 
       if (!mounted) return;
 
@@ -132,26 +153,41 @@ class _LoginScreenState extends State<LoginScreen> {
 
       // Guarda el token y deja que SessionGate muestre el catálogo.
       await widget.session.startSession(authResponse.token);
+    } on AuthException catch (e) {
+      // Solo un 401 significa credenciales inválidas. La red, el timeout, un
+      // 5xx o una respuesta no interpretable se informan aparte para no
+      // ocultar fallos de infraestructura tras el mensaje de credenciales.
+      await _applyLoginError(
+        handsWereUp: handsWereUp,
+        message: e.statusCode == 401
+            ? _loginErrorMessage
+            : _connectionErrorMessage,
+      );
     } catch (_) {
-      // Cualquier fallo del intento (credenciales, red, timeout o servidor)
-      // produce el mismo mensaje, sin distinguir su causa.
-      await _applyLoginError();
+      // Excepción inesperada: no se puede afirmar que las credenciales fallen.
+      await _applyLoginError(
+        handsWereUp: handsWereUp,
+        message: _connectionErrorMessage,
+      );
     }
   }
 
   // Único punto de error del login: restablece el estado, muestra el mensaje
-  // genérico y dispara la animación de fallo del oso.
-  Future<void> _applyLoginError() async {
+  // correspondiente y dispara la animación de fallo del oso.
+  Future<void> _applyLoginError({
+    required bool handsWereUp,
+    String? message,
+  }) async {
     if (!mounted) return;
 
     setState(() {
       _isLoading = false;
       _isSubmitting = false;
-      _loginError = _loginErrorMessage;
+      _loginError = message ?? _loginErrorMessage;
     });
 
     // Igual que en el éxito, el trigger de fallo necesita la máquina en reposo.
-    await _settleAnimation();
+    await _settleAnimation(handsWereUp: handsWereUp);
 
     if (!mounted) return;
 
