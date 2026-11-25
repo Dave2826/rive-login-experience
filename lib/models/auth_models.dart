@@ -9,6 +9,20 @@ class LoginRequest {
   }
 }
 
+/// Petición de inicio de sesión con el ID Token emitido por Firebase.
+///
+/// La app no envía identidad ni rol: el backend verifica el token y decide
+/// la identidad y los permisos.
+class FirebaseLoginRequest {
+  final String idToken;
+
+  const FirebaseLoginRequest({required this.idToken});
+
+  Map<String, dynamic> toJson() {
+    return {'idToken': idToken};
+  }
+}
+
 class AuthResponse {
   final String token;
 

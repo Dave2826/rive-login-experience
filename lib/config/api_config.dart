@@ -14,11 +14,17 @@ class ApiConfig {
   /// Endpoint de autenticación (POST /auth/login)
   static const String loginEndpoint = '/auth/login';
 
+  /// Endpoint de autenticación con ID Token de Firebase (POST /auth/firebase)
+  static const String firebaseLoginEndpoint = '/auth/firebase';
+
   /// Endpoint de catálogo de platillos (GET /api/platillos)
   static const String platillosEndpoint = '/api/platillos';
 
   /// URI completa para inicio de sesión
   static Uri get loginUri => Uri.parse('$baseUrl$loginEndpoint');
+
+  /// URI completa para el inicio de sesión con Firebase
+  static Uri get firebaseLoginUri => Uri.parse('$baseUrl$firebaseLoginEndpoint');
 
   /// URI completa para el catálogo de platillos
   static Uri get platillosUri => Uri.parse('$baseUrl$platillosEndpoint');
