@@ -13,6 +13,14 @@ void main() {
     });
   });
 
+  group('FirebaseLoginRequest', () {
+    test('toJson envía únicamente el idToken', () {
+      const request = FirebaseLoginRequest(idToken: 'id-token');
+
+      expect(request.toJson(), <String, dynamic>{'idToken': 'id-token'});
+    });
+  });
+
   group('AuthResponse', () {
     test('fromJson lee el token de la respuesta', () {
       final response = AuthResponse.fromJson(<String, dynamic>{

@@ -42,10 +42,22 @@ void main() {
       expect(ApiConfig.platillosUri.path.startsWith('//'), isFalse);
     });
 
+    test('firebaseLoginUri apunta a /auth/firebase', () {
+      expect(
+        ApiConfig.firebaseLoginUri,
+        Uri.parse('${ApiConfig.baseUrl}/auth/firebase'),
+      );
+      expect(ApiConfig.firebaseLoginUri.path, '/auth/firebase');
+    });
+
     test('las URIs derivadas comparten host y puerto de baseUrl', () {
       final base = Uri.parse(ApiConfig.baseUrl);
 
-      for (final uri in [ApiConfig.loginUri, ApiConfig.platillosUri]) {
+      for (final uri in [
+        ApiConfig.loginUri,
+        ApiConfig.firebaseLoginUri,
+        ApiConfig.platillosUri,
+      ]) {
         expect(uri.scheme, base.scheme);
         expect(uri.host, base.host);
         expect(uri.port, base.port);

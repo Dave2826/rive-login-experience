@@ -151,6 +151,108 @@ void main() {
     });
   });
 
+  group('AuthService.loginWithFirebase · respuesta', () {
+    Future<AuthException> captureFirebaseError(MockClient client) async {
+      try {
+        await _serviceWith(client).loginWithFirebase('id-token-de-prueba');
+      } on AuthException catch (error) {
+        return error;
+      }
+      fail('Se esperaba una AuthException y el login terminó con éxito.');
+    }
+
+    test('envía POST a /auth/firebase con el idToken', () async {
+      late http.Request captured;
+
+      final client = MockClient((request) async {
+        captured = request;
+        return http.Response(
+          jsonEncode(<String, String>{'token': 'jwt-backend'}),
+          200,
+          headers: _jsonHeaders,
+        );
+      });
+
+      await _serviceWith(client).loginWithFirebase('id-token-de-prueba');
+
+      expect(captured.method, 'POST');
+      expect(captured.url.path, '/auth/firebase');
+      expect(captured.headers['Content-Type'], contains('application/json'));
+      expect(jsonDecode(captured.body), <String, dynamic>{
+        'idToken': 'id-token-de-prueba',
+      });
+    });
+
+    test('HTTP 200 devuelve el JWT del backend', () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, String>{'token': 'jwt-backend'}),
+          200,
+          headers: _jsonHeaders,
+        ),
+      );
+
+      final response = await _serviceWith(client).loginWithFirebase('id-token');
+
+      expect(response.token, 'jwt-backend');
+    });
+
+    test('HTTP 401 se reporta como credenciales inválidas', () async {
+      final client = MockClient((_) async => http.Response('{}', 401));
+
+      final error = await captureFirebaseError(client);
+
+      expect(error.statusCode, 401);
+      expect(error.message, contains('Credenciales'));
+    });
+
+    test('HTTP 403 propaga el mensaje seguro del servidor', () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, dynamic>{
+            'status': 403,
+            'message': 'El correo de la cuenta no esta verificado',
+          }),
+          403,
+          headers: _jsonHeaders,
+        ),
+      );
+
+      final error = await captureFirebaseError(client);
+
+      expect(error.statusCode, 403);
+      expect(error.message, contains('no esta verificado'));
+    });
+
+    test('HTTP 503 informa que Firebase no está habilitado', () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, dynamic>{
+            'status': 503,
+            'message': 'La autenticación con Firebase no está habilitada en el servidor',
+          }),
+          503,
+          headers: _jsonHeaders,
+        ),
+      );
+
+      final error = await captureFirebaseError(client);
+
+      expect(error.statusCode, 503);
+      expect(error.message, contains('Firebase'));
+    });
+
+    test('SocketException se reporta como fallo de conexión', () async {
+      final client = MockClient(
+        (_) async => throw const SocketException('sin red'),
+      );
+
+      final error = await captureFirebaseError(client);
+
+      expect(error.message, contains('conectar'));
+    });
+  });
+
   group('AuthException', () {
     test('toString devuelve el mensaje', () {
       const error = AuthException('fallo', statusCode: 401);
