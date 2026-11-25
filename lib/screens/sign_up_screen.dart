@@ -84,16 +84,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      // El backend exige correo verificado antes de emitir su JWT. Si el envío
+      // falla, la cuenta ya existe y el usuario puede reenviarlo al iniciar
+      // sesión.
+      try {
+        await credential.user?.sendEmailVerification();
+      } catch (_) {
+        // Sin correo de verificación la cuenta sigue siendo válida.
+      }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Cuenta creada exitosamente'),
+          content: Text(
+            'Cuenta creada. Revisa tu correo institucional para verificarla antes de iniciar sesión.',
+          ),
           backgroundColor: Colors.green,
         ),
       );
