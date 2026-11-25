@@ -122,9 +122,13 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final authResponse = await _authService.login(
-        LoginRequest(username: username, password: pass),
-      );
+      // Las cuentas con correo se autentican en Firebase Authentication; el
+      // usuario sin `@` sigue usando el login legado contra Spring Boot.
+      final token = username.contains('@')
+          ? await _loginWithFirebase(username, pass)
+          : (await _authService.login(
+              LoginRequest(username: username, password: pass),
+            )).token;
 
       if (!mounted) return;
 
@@ -152,17 +156,24 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       // Guarda el token y deja que SessionGate muestre el catálogo.
-      await widget.session.startSession(authResponse.token);
+      await widget.session.startSession(token);
     } on AuthException catch (e) {
       // Solo un 401 significa credenciales inválidas. La red, el timeout, un
       // 5xx o una respuesta no interpretable se informan aparte para no
       // ocultar fallos de infraestructura tras el mensaje de credenciales.
-      await _applyLoginError(
-        handsWereUp: handsWereUp,
-        message: e.statusCode == 401
-            ? _loginErrorMessage
-            : _connectionErrorMessage,
-      );
+      final String message;
+
+      if (e.statusCode == 401) {
+        message = _loginErrorMessage;
+      } else if (e.statusCode == 403 || e.statusCode == 503) {
+        // Política institucional (dominio o correo sin verificar) o Firebase
+        // no disponible: el mensaje del servidor explica qué hacer.
+        message = e.message;
+      } else {
+        message = _connectionErrorMessage;
+      }
+
+      await _applyLoginError(handsWereUp: handsWereUp, message: message);
     } catch (_) {
       // Excepción inesperada: no se puede afirmar que las credenciales fallen.
       await _applyLoginError(
@@ -170,6 +181,46 @@ class _LoginScreenState extends State<LoginScreen> {
         message: _connectionErrorMessage,
       );
     }
+  }
+
+  // Autentica contra Firebase Authentication y obtiene el JWT del backend.
+  //
+  // Firebase valida la contraseña; el backend verifica el ID Token, aprovisiona
+  // al usuario si es su primer acceso y emite el JWT que exige el catálogo.
+  Future<String> _loginWithFirebase(String email, String password) async {
+    final UserCredential credential;
+
+    try {
+      credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'network-request-failed') {
+        throw const AuthException(
+          'No se pudo conectar con el servidor de autenticación.',
+        );
+      }
+
+      // Mismo mensaje genérico que el login REST: no se revela si el correo
+      // existe ni cuál de las dos credenciales falló (OWASP).
+      throw const AuthException(
+        'Credenciales de acceso inválidas.',
+        statusCode: 401,
+      );
+    }
+
+    final idToken = await credential.user?.getIdToken();
+
+    if (idToken == null || idToken.isEmpty) {
+      throw const AuthException(
+        'No se pudo obtener la credencial de Firebase.',
+      );
+    }
+
+    final authResponse = await _authService.loginWithFirebase(idToken);
+
+    return authResponse.token;
   }
 
   // Único punto de error del login: restablece el estado, muestra el mensaje
@@ -393,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: 'Usuario',
+                    hintText: 'Usuario o correo',
                     prefixIcon: const Icon(Icons.person),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
