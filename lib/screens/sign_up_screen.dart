@@ -1,3 +1,4 @@
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -87,23 +88,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final credential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
-      // El backend exige correo verificado antes de emitir su JWT. Si el envío
-      // falla, la cuenta ya existe y el usuario puede reenviarlo al iniciar
-      // sesión.
+      bool verificationSent = false;
+
       try {
         await credential.user?.sendEmailVerification();
-      } catch (_) {
-        // Sin correo de verificación la cuenta sigue siendo válida.
+        verificationSent = true;
+      } on FirebaseAuthException {
+        verificationSent = false;
       }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Cuenta creada. Revisa tu correo institucional para verificarla antes de iniciar sesión.',
+            verificationSent
+                ? 'Cuenta creada. Revisa tu correo institucional para verificarla antes de iniciar sesión.'
+                : 'Cuenta creada, pero no se pudo enviar el correo de verificación. Podrás solicitarlo nuevamente desde el inicio de sesión.',
           ),
-          backgroundColor: Colors.green,
+          backgroundColor: verificationSent ? Colors.green : Colors.orange,
+          duration: const Duration(seconds: 6),
         ),
       );
 
@@ -238,7 +242,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _handleSignUp,
+                onPressed: _isLoading ? null : _handleSignUp,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(

@@ -61,6 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Estado de carga del botón (CircularProgressIndicator)
   bool _isLoading = false;
+  bool _verificationPending = false;
+  bool _isVerificationActionLoading = false;
+  String? _verificationEmail;
 
   // Guardia interna para impedir envíos duplicados, incluso después de
   // apagar el indicador de carga durante la animación de éxito.
@@ -105,6 +108,8 @@ class _LoginScreenState extends State<LoginScreen> {
     // Nuevo intento: se limpia el error anterior, sea cual sea su origen.
     setState(() {
       _loginError = null;
+      _verificationPending = false;
+      _verificationEmail = null;
     });
 
     FocusScope.of(context).unfocus();
@@ -188,41 +193,226 @@ class _LoginScreenState extends State<LoginScreen> {
   // Firebase valida la contraseña; el backend verifica el ID Token, aprovisiona
   // al usuario si es su primer acceso y emite el JWT que exige el catálogo.
   Future<String> _loginWithFirebase(String email, String password) async {
-    final UserCredential credential;
+  final UserCredential credential;
 
-    try {
-      credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'network-request-failed') {
-        throw const AuthException(
-          'No se pudo conectar con el servidor de autenticación.',
-        );
-      }
-
-      // Mismo mensaje genérico que el login REST: no se revela si el correo
-      // existe ni cuál de las dos credenciales falló (OWASP).
+  try {
+    credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  } on FirebaseAuthException catch (e) {
+    if (e.code == 'network-request-failed') {
       throw const AuthException(
-        'Credenciales de acceso inválidas.',
-        statusCode: 401,
+        'No se pudo conectar con el servidor de autenticación.',
       );
     }
 
-    final idToken = await credential.user?.getIdToken();
-
-    if (idToken == null || idToken.isEmpty) {
-      throw const AuthException(
-        'No se pudo obtener la credencial de Firebase.',
-      );
-    }
-
-    final authResponse = await _authService.loginWithFirebase(idToken);
-
-    return authResponse.token;
+    throw const AuthException(
+      'Credenciales de acceso inválidas.',
+      statusCode: 401,
+    );
   }
 
+  final user = credential.user;
+
+  if (user == null) {
+    throw const AuthException(
+      'No se pudo obtener el usuario de Firebase.',
+    );
+  }
+
+  await user.reload();
+
+  final refreshedUser = FirebaseAuth.instance.currentUser;
+
+  if (refreshedUser == null) {
+    throw const AuthException(
+      'No se pudo recuperar la sesión de Firebase.',
+    );
+  }
+
+  if (!refreshedUser.emailVerified) {
+    if (mounted) {
+      setState(() {
+        _verificationPending = true;
+        _verificationEmail = email;
+      });
+    }
+
+    throw const AuthException(
+      'Debes verificar tu correo institucional antes de iniciar sesión.',
+      statusCode: 403,
+    );
+  }
+
+  if (mounted) {
+    setState(() {
+      _verificationPending = false;
+      _verificationEmail = null;
+    });
+  }
+
+  final idToken = await refreshedUser.getIdToken(true);
+
+  if (idToken == null || idToken.isEmpty) {
+    throw const AuthException(
+      'No se pudo obtener la credencial de Firebase.',
+    );
+  }
+
+  final authResponse = await _authService.loginWithFirebase(idToken);
+
+  return authResponse.token;
+}
+
+Future<void> _resendVerificationEmail() async {
+  if (_isVerificationActionLoading) return;
+
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (user == null) {
+    _showVerificationMessage(
+      'Inicia sesión nuevamente para solicitar la verificación.',
+    );
+    return;
+  }
+
+  setState(() => _isVerificationActionLoading = true);
+
+  try {
+    await user.reload();
+
+    final refreshedUser = FirebaseAuth.instance.currentUser;
+
+    if (refreshedUser == null) {
+      throw Exception();
+    }
+
+    if (refreshedUser.emailVerified) {
+      _showVerificationMessage(
+        'Tu correo ya está verificado. Comprueba tu acceso.',
+      );
+      return;
+    }
+
+    await refreshedUser.sendEmailVerification();
+
+    _showVerificationMessage(
+      'Se envió nuevamente el correo de verificación.',
+    );
+  } catch (_) {
+    _showVerificationMessage(
+      'No se pudo enviar el correo. Inténtalo nuevamente.',
+    );
+  } finally {
+    if (mounted) {
+      setState(() => _isVerificationActionLoading = false);
+    }
+  }
+}
+
+Future<void> _checkEmailVerification() async {
+    if (_isSubmitting || _isVerificationActionLoading) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showVerificationMessage(
+        'Tu sesión de verificación expiró. Inicia sesión nuevamente.',
+      );
+      return;
+    }
+
+    setState(() {
+      _isVerificationActionLoading = true;
+      _isSubmitting = true;
+      _isLoading = true;
+      _loginError = null;
+    });
+
+    try {
+      await user.reload();
+      final refreshedUser = FirebaseAuth.instance.currentUser;
+
+      if (refreshedUser == null || !refreshedUser.emailVerified) {
+        if (mounted) {
+          setState(() {
+            _verificationPending = true;
+            _loginError = 'Tu correo aún no está verificado.';
+          });
+        }
+        return;
+      }
+
+      final idToken = await refreshedUser.getIdToken(true);
+      if (idToken == null || idToken.isEmpty) {
+        throw const AuthException('No se pudo obtener la credencial de Firebase.');
+      }
+
+      final authResponse = await _authService.loginWithFirebase(idToken);
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+        _verificationPending = false;
+        _verificationEmail = null;
+      });
+
+      await _settleAnimation(handsWereUp: _isHandsUp?.value ?? false);
+      if (!mounted) return;
+
+      _trigSuccess?.fire();
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+
+      await widget.session.startSession(authResponse.token);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loginError = e.statusCode == 401
+            ? _loginErrorMessage
+            : (e.statusCode == 403 || e.statusCode == 503)
+                ? e.message
+                : _connectionErrorMessage;
+      });
+      await _settleAnimation(handsWereUp: _isHandsUp?.value ?? false);
+      if (mounted) _trigFail?.fire();
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loginError = e.code == 'network-request-failed'
+            ? _connectionErrorMessage
+            : 'No se pudo comprobar la verificación del correo. Inténtalo nuevamente.';
+      });
+      await _settleAnimation(handsWereUp: _isHandsUp?.value ?? false);
+      if (mounted) _trigFail?.fire();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loginError = _connectionErrorMessage);
+      await _settleAnimation(handsWereUp: _isHandsUp?.value ?? false);
+      if (mounted) _trigFail?.fire();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isSubmitting = false;
+          _isVerificationActionLoading = false;
+        });
+      }
+    }
+  }
+
+void _showVerificationMessage(String message) {
+  if (!mounted) return;
+
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+}
   // Único punto de error del login: restablece el estado, muestra el mensaje
   // correspondiente y dispara la animación de fallo del oso.
   Future<void> _applyLoginError({
@@ -541,12 +731,48 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 10),
                 ],
 
+                if (_verificationPending) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'La cuenta ${_verificationEmail ?? ''} aún no ha verificado su correo institucional.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: (_isVerificationActionLoading || _isSubmitting)
+                          ? null
+                          : _resendVerificationEmail,
+                      child: _isVerificationActionLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Reenviar correo de verificación'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: (_isVerificationActionLoading || _isSubmitting)
+                          ? null
+                          : _checkEmailVerification,
+                      child: const Text('Ya verifiqué mi correo'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Botón Login
                 SizedBox(
                   width: size.width,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _onLogin,
+                    onPressed: _isSubmitting ? null : _onLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.pinkAccent,
                       foregroundColor: Colors.white,
