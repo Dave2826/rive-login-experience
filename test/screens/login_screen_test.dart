@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:login_drive_animation/screens/login_screen.dart';
 import 'package:login_drive_animation/services/auth_service.dart';
 import 'package:login_drive_animation/services/session_controller.dart';
+import 'package:login_drive_animation/config/app_strings.dart';
 
 import '../helpers/test_doubles.dart';
 
@@ -51,11 +52,11 @@ void main() {
     );
 
     expect(find.byType(TextField), findsNWidgets(2));
-    expect(find.text('tu@correo.com'), findsOneWidget);
-    expect(find.text('Contraseña'), findsOneWidget);
-    expect(find.widgetWithText(ElevatedButton, 'Iniciar sesión'), findsOneWidget);
-    expect(find.text('¿No tienes una cuenta? '), findsOneWidget);
-    expect(find.text('Regístra'), findsOneWidget);
+    expect(find.text(AppStrings.emailHint), findsOneWidget);
+    expect(find.text(AppStrings.passwordFieldLabel), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, AppStrings.loginScreenTitle), findsOneWidget);
+    expect(find.text(AppStrings.noAccountLabel), findsOneWidget);
+    expect(find.widgetWithText(ElevatedButton, AppStrings.registerButton), findsOneWidget);
   });
 
   testWidgets('muestra el aviso de sesión pendiente', (tester) async {
@@ -93,9 +94,10 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'admin');
     await tester.enterText(find.byType(TextField).at(1), '1234');
-    await tester.tap(find.widgetWithText(ElevatedButton, 'Iniciar sesión'));
+    await tester.tap(find.widgetWithText(ElevatedButton, AppStrings.loginScreenTitle));
     await tester.pump();
-
+    await tester.pump(const Duration(seconds: 1));
+    
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(
       tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
@@ -121,12 +123,12 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'admin');
     await tester.enterText(find.byType(TextField).at(1), '1234');
-    await tester.tap(find.widgetWithText(ElevatedButton, 'Iniciar sesión'));
+    await tester.tap(find.widgetWithText(ElevatedButton, AppStrings.loginScreenTitle));
     await tester.pump();
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Credenciales inválidas'), findsOneWidget);
+    expect(find.text(AppStrings.loginErrorInvalid), findsOneWidget);
 
     await _drainLoginTimers(tester);
   });

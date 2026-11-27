@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
+import 'package:login_drive_animation/config/app_strings.dart';
+
 import 'package:login_drive_animation/screens/login_screen.dart';
 import 'package:login_drive_animation/screens/products_screen.dart';
 import 'package:login_drive_animation/screens/session_gate.dart';
@@ -60,7 +62,7 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.text('Usuario o correo'), findsOneWidget);
+    expect(find.text(AppStrings.emailFieldLabel), findsOneWidget);
   });
 
   testWidgets('con token vigente muestra el catálogo', (tester) async {
@@ -76,7 +78,7 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byType(ProductsScreen), findsOneWidget);
-    expect(find.text('Menú de platillos'), findsOneWidget);
+    expect(find.text(AppStrings.platillosTitle), findsOneWidget);
 
     await _pumpFrames(tester, 2);
 
@@ -93,10 +95,7 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.byType(LoginScreen), findsOneWidget);
-    expect(
-      find.text(SessionController.sessionExpiredMessage),
-      findsOneWidget,
-    );
+    expect(find.text(SessionController.sessionExpiredMessage), findsOneWidget);
     expect(storage.stored, isNull);
   });
 }
