@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../services/product_service.dart';
 import '../services/session_controller.dart';
 import 'login_screen.dart';
 import 'products_screen.dart';
@@ -13,7 +14,18 @@ import 'products_screen.dart';
 class SessionGate extends StatefulWidget {
   final SessionController session;
 
-  const SessionGate({super.key, required this.session});
+  /// Servicio inyectable para pruebas; en producción se usa [ProductService].
+  final ProductService? productService;
+
+  /// Animación inyectable para las pruebas del login; por defecto usa Rive.
+  final Widget? loginAnimation;
+
+  const SessionGate({
+    super.key,
+    required this.session,
+    this.productService,
+    this.loginAnimation,
+  });
 
   @override
   State<SessionGate> createState() => _SessionGateState();
@@ -39,9 +51,13 @@ class _SessionGateState extends State<SessionGate> {
             return ProductsScreen(
               key: ValueKey<String>(widget.session.token ?? ''),
               session: widget.session,
+              productService: widget.productService,
             );
           case SessionStatus.unauthenticated:
-            return LoginScreen(session: widget.session);
+            return LoginScreen(
+              session: widget.session,
+              animation: widget.loginAnimation,
+            );
         }
       },
     );

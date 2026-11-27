@@ -9,20 +9,28 @@ import '../services/session_controller.dart';
 class ProductsScreen extends StatefulWidget {
   final SessionController session;
 
-  const ProductsScreen({super.key, required this.session});
+  /// Servicio inyectable para pruebas; en producción se usa [ProductService].
+  final ProductService? productService;
+
+  const ProductsScreen({
+    super.key,
+    required this.session,
+    this.productService,
+  });
 
   @override
   State<ProductsScreen> createState() => _ProductsScreenState();
 }
 
 class _ProductsScreenState extends State<ProductsScreen> {
-  final ProductService productService = ProductService();
+  late final ProductService productService;
 
   late Future<List<Platillo>> productsFuture;
 
   @override
   void initState() {
     super.initState();
+    productService = widget.productService ?? ProductService();
     productsFuture = _fetchProducts();
   }
 

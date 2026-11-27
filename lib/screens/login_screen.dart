@@ -8,11 +8,23 @@ import '../models/auth_models.dart';
 import '../services/auth_service.dart';
 import '../services/session_controller.dart';
 import 'sign_up_screen.dart';
+import '../config/app_strings.dart';
 
 class LoginScreen extends StatefulWidget {
   final SessionController session;
 
-  const LoginScreen({super.key, required this.session});
+  /// Servicio inyectable para pruebas; en producción no se usa.
+  final AuthService? authService;
+
+  /// Widget inyectable para pruebas; en producción se usa la animación Rive.
+  final Widget? animation;
+
+  const LoginScreen({
+    super.key,
+    required this.session,
+    this.authService,
+    this.animation,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -634,7 +646,8 @@ void _showVerificationMessage(String message) {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: 'Usuario o correo',
+                    hintText: AppStrings.emailHint,
+                    labelText: AppStrings.emailFieldLabel,
                     prefixIcon: const Icon(Icons.person),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -659,7 +672,7 @@ void _showVerificationMessage(String message) {
                     _isHandsUp?.change(true);
                   },
                   decoration: InputDecoration(
-                    hintText: 'Password',
+                    hintText: AppStrings.passwordFieldLabel,
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -684,9 +697,9 @@ void _showVerificationMessage(String message) {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: _showForgotPasswordDialog,
-                    child: const Text(
-                      'Forgot password?',
-                      style: TextStyle(decoration: TextDecoration.underline),
+                    child: Text(
+                      AppStrings.forgotPasswordLink,
+                      style: const TextStyle(decoration: TextDecoration.underline),
                     ),
                   ),
                 ),
@@ -789,7 +802,7 @@ void _showVerificationMessage(String message) {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Login', style: TextStyle(fontSize: 18)),
+                        : const Text(AppStrings.loginScreenTitle, style: TextStyle(fontSize: 18)),
                   ),
                 ),
 
@@ -810,7 +823,7 @@ void _showVerificationMessage(String message) {
                         );
                       },
                       child: const Text(
-                        'Register',
+                        AppStrings.registerButton,
                         style: TextStyle(
                           color: Colors.black,
                           fontWeight: FontWeight.bold,

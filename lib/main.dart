@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 
 import 'firebase_options.dart';
 import 'screens/session_gate.dart';
 import 'services/session_controller.dart';
 import 'services/token_storage.dart';
+import 'config/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +26,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'Ride Login Experience',
+      theme: lightTheme(),
+      locale: Locale('es', 'MX'),
+      supportedLocales: [Locale('es', 'MX')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
       home: SessionGate(session: session),
     );
   }

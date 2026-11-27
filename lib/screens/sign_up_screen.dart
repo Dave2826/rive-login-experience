@@ -1,6 +1,7 @@
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../config/app_strings.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -103,8 +104,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         SnackBar(
           content: Text(
             verificationSent
-                ? 'Cuenta creada. Revisa tu correo institucional para verificarla antes de iniciar sesión.'
-                : 'Cuenta creada, pero no se pudo enviar el correo de verificación. Podrás solicitarlo nuevamente desde el inicio de sesión.',
+                ? AppStrings.verificationSentMessage
+                : AppStrings.verificationFailedMessage,
           ),
           backgroundColor: verificationSent ? Colors.green : Colors.orange,
           duration: const Duration(seconds: 6),
@@ -115,18 +116,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
     } on FirebaseAuthException catch (e) {
       setState(() {
         if (e.code == 'email-already-in-use') {
-          _emailError = 'Este correo ya está registrado';
+          _emailError = AppStrings.emailAlreadyInUse;
         } else if (e.code == 'invalid-email') {
-          _emailError = 'Correo inválido';
+          _emailError = AppStrings.invalidEmail;
         } else if (e.code == 'weak-password') {
-          _passwordError = 'Contraseña muy débil';
+          _passwordError = AppStrings.weakPassword;
         } else {
-          _emailError = 'Error al crear cuenta: ${e.message}';
+          _emailError = '${AppStrings.createAccountError} ${e.message}';
         }
       });
     } catch (_) {
       setState(() {
-        _emailError = 'Error inesperado al crear cuenta';
+        _emailError = AppStrings.unexpectedError;
       });
     } finally {
       if (mounted) {
@@ -138,7 +139,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Crear cuenta')),
+      appBar: AppBar(title: const Text(AppStrings.signUpTitle)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -148,8 +149,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
               decoration: InputDecoration(
-                labelText: 'Correo institucional',
-                hintText: 'usuario@tecdesoftware.edu.mx',
+                labelText: AppStrings.institutionalEmailLabel,
+                hintText: AppStrings.institutionalEmailHint,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -171,7 +172,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               controller: _passwordController,
               obscureText: true,
               decoration: InputDecoration(
-                labelText: 'Contraseña',
+                labelText: AppStrings.passwordLabel,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -192,26 +193,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '• Mínimo 8 caracteres',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                Text(
-                  '• Al menos una letra mayúscula',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                Text(
-                  '• Al menos una letra minúscula',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                Text(
-                  '• Al menos un número',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                Text(
-                  '• Al menos un símbolo (@\$!%*?&)',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+                Text(AppStrings.minEightChars,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(AppStrings.minUppercase,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(AppStrings.minLowercase,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(AppStrings.minNumber,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(AppStrings.minSymbol,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
 
@@ -221,7 +212,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               controller: _confirmPasswordController,
               obscureText: true,
               decoration: InputDecoration(
-                labelText: 'Confirmar contraseña',
+                labelText: AppStrings.confirmPasswordLabel,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -258,7 +249,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('Crear cuenta'),
+                    : const Text(AppStrings.signUpButton),
               ),
             ),
           ],
